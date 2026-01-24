@@ -3,10 +3,15 @@
 Provision a small, long-running **K3s** cluster on **Proxmox** using **Pulumi (Python 3.12)**, then install **Longhorn** with replicas restricted to SSD-backed nodes.
 
 This repo is designed for a modern homelab setup:
-- **Proxmox** creates/clones VMs from a cloud-init template
+- **Pulumi ProxmoxVE provider** creates/clones VMs from a cloud-init template
 - **Pulumi Command (remote SSH)** bootstraps K3s on those VMs
 - **Pulumi Kubernetes** installs Longhorn via Helm
 - Nodes are labeled at bootstrap so you can use affinity/selection later
+    - `homelab.pukar.io/cluster=<cluster_name>`
+    - `homelab.pukar.io/role=<role>` | server or worker
+    - `homelab.pukar.io/storage=<storage_type>` | ssd or hdd
+    - `homelab.pukar.io/nodepool=<nodepool>` | core if ssd, bulk if hdd
+- Proxmox auth uses a **Proxmox API token stored as a Pulumi secret** (no shell `export ...` required)
 
 ---
 
@@ -74,5 +79,31 @@ pulumi-automate/
 
 ### Proxmox
 * cloud-init enabled VM template (Ubuntu recommended)
-* SSH public key baked into template
-    * 
+* Your __SSH public key baked into template__
+    * Pulumi uses your private key to SSH in for bootstrap
+
+---
+
+## Authentication
+
+---
+
+## Install Dependencies
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+---
+
+## Pulumi stack setup
+
+```bash
+# Create/select a stack
+pulumi stack init dev
+# or
+pulumi stack select dev
+```
+
