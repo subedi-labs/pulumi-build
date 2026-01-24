@@ -65,8 +65,8 @@ Some Ubuntu cloud images include it; some don’t.
 
 ### What you get
 
-After it completes, you’ll have a Proxmox template VM (VMID you chose) suitable for fast cloning via Pulumi/Proxmox.
+After it completes, you’ll have a Proxmox template VM suitable for fast cloning via Pulumi/Proxmox. Default VMID: `999` and name: `ubuntu-2404-template`
 
-verify in Proxmox UI:
+Verify in Proxmox UI:
 - VM shows a cloud-init drive
 - VM is marked as Template
