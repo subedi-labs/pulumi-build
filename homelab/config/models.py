@@ -1,10 +1,7 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Literal
 
 import pulumi
-
 
 NodeRole = Literal["server", "worker"]
 
@@ -41,22 +38,16 @@ class LonghornSpec:
 
 @dataclass(frozen=True)
 class Config:
-    """
-    In-memory config for the Pulumi program.
-
-    Notes:
-      - ssh_private_key and k3s_token are Pulumi secrets (pulumi.Output[str]) filled by load.py
-      - We keep this module Pulumi-agnostic by typing those as 'object'.
-    """
     stack: str
     nodes: list[NodeSpec]
     template: TemplateSpec
 
     ssh_user: str
-    ssh_private_key: pulumi.Output[str]  # change to object if you want to keep Pulumi-agnostic
+    ssh_private_key: pulumi.Output[str]
+    ssh_private_key_path: str | None
 
     k3s_version: str
-    k3s_token: pulumi.Output[str]  # change to object if you want to keep Pulumi-agnostic
+    k3s_token: pulumi.Output[str]
 
     longhorn: LonghornSpec
     primary_server_ip: str
