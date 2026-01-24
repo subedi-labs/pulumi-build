@@ -1,0 +1,108 @@
+config:
+  pulumi-automate:sshUser: ubuntu
+  pulumi-automate:sshPrivateKey:
+    secure: "REPLACE_ME_WITH_PULUMI_SECRET"
+  pulumi-automate:sshPublicKeys:
+    - "ssh-ed25519 AAAA... yourkey"
+
+  pulumi-automate:k3s:
+    version: "v1.33.3+k3s1"
+    token:
+      secure: "REPLACE_ME_WITH_PULUMI_SECRET"
+
+  pulumi-automate:template:
+    nodeName: proxmox1
+    vmId: 9000
+
+  pulumi-automate:longhorn:
+    replicaCount: 2
+    kubeletRootDir: /var/lib/rancher/k3s/agent/kubelet
+    ssdNodeNames:
+      - k3s-s1
+      - k3s-w1
+      - k3s-s2config:
+  pulumi-automate:sshUser: ubuntu
+  pulumi-automate:sshPrivateKey:
+    secure: "REPLACE_ME"
+
+  pulumi-automate:k3sVersion: "v1.33.3+k3s1"
+  pulumi-automate:k3sToken:
+    secure: "REPLACE_ME"
+
+  pulumi-automate:template:
+    nodeName: proxmox1
+    vmId: 9000
+
+  pulumi-automate:ssdNodeNames:
+    - k3s-s1
+    - k3s-w1
+    - k3s-s2
+    - k3s-w2
+
+  pulumi-automate:longhornReplicaCount: 2
+  pulumi-automate:longhornKubeletRootDir: /var/lib/rancher/k3s/agent/kubelet
+      ip4: 10.10.0.51/24
+      gw4: 10.10.0.1
+      cores: 4
+      memoryMb: 8192
+      diskGb: 60
+      datastoreId: local-lvm
+      initDatastoreId: local-lvm
+      bridge: vmbr0
+      vlanId: 2
+
+    - name: k3s-w1
+      role: worker
+      proxmoxNode: proxmox1
+      vmId: 1102
+      ip4: 10.10.0.61/24
+      gw4: 10.10.0.1
+      cores: 4
+      memoryMb: 8192
+      diskGb: 80
+      datastoreId: local-lvm
+      initDatastoreId: local-lvm
+      bridge: vmbr0
+      vlanId: 2
+
+    - name: k3s-s2
+      role: server
+      proxmoxNode: proxmox2
+      vmId: 1201
+      ip4: 10.10.0.52/24
+      gw4: 10.10.0.1
+      cores: 4
+      memoryMb: 8192
+      diskGb: 60
+      datastoreId: local-lvm
+      initDatastoreId: local-lvm
+      bridge: vmbr0
+      vlanId: 2
+
+    - name: k3s-w2
+      role: worker
+      proxmoxNode: proxmox2
+      vmId: 1202
+      ip4: 10.10.0.62/24
+      gw4: 10.10.0.1
+      cores: 4
+      memoryMb: 8192
+      diskGb: 80
+      datastoreId: local-lvm
+      initDatastoreId: local-lvm
+      bridge: vmbr0
+      vlanId: 2
+
+    - name: k3s-w3
+      role: worker
+      proxmoxNode: proxmox3
+      vmId: 1301
+      ip4: 10.10.0.63/24
+      gw4: 10.10.0.1
+      cores: 4
+      memoryMb: 8192
+      diskGb: 200
+      datastoreId: local-lvm
+      initDatastoreId: local-lvm
+      bridge: vmbr0
+      vlanId: 2
