@@ -1,0 +1,101 @@
+config:
+  # Proxmox connection settings
+  # Set these using: pulumi config set proxmox:endpoint "https://your-proxmox-host:8006"
+  # Set API token using: pulumi config set --secret proxmox:apiToken "root@pam!mytoken=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  proxmox:endpoint: https://proxmox.example.com:8006
+  proxmox:insecure: false  # Set to true to skip TLS verification
+  
+  # VM configurations
+  vms:
+    # VM 1 - Cloned from template
+    - name: web-server-01
+      nodeName: pve1  # Proxmox host name
+      vmId: 100       # Optional: specific VM ID
+      cpu:
+        cores: 2
+        sockets: 1
+      memory:
+        dedicated: 4096  # 4GB in MB
+      disk:
+        interface: scsi0
+        datastoreId: local-lvm
+        size: 32  # GB
+        fileFormat: qcow2
+      network:
+        bridge: vmbr0
+        model: virtio
+      clone:
+        nodeName: pve1
+        vmId: 9000  # Template VM ID
+        full: true
+      cloudInit:
+        datastoreId: local-lvm
+        dns:
+          domain: example.com
+          server: 8.8.8.8
+        ipv4:
+          address: 192.168.1.100/24
+          gateway: 192.168.1.1
+        sshKeys:
+          - "ssh-rsa AAAAB3NzaC1yc2E... your-key-here"
+        username: admin
+    
+    # VM 2 - Different host, different configuration
+    - name: db-server-01
+      nodeName: pve2  # Different Proxmox host
+      vmId: 101
+      cpu:
+        cores: 4
+        sockets: 1
+      memory:
+        dedicated: 8192  # 8GB in MB
+      disk:
+        interface: scsi0
+        datastoreId: local-lvm
+        size: 64  # GB
+      network:
+        bridge: vmbr0
+        model: virtio
+      clone:
+        nodeName: pve2
+        vmId: 9000
+        full: true
+      cloudInit:
+        datastoreId: local-lvm
+        dns:
+          domain: example.com
+          server: 8.8.8.8
+        ipv4:
+          address: 192.168.1.101/24
+          gateway: 192.168.1.1
+        sshKeys:
+          - "ssh-rsa AAAAB3NzaC1yc2E... your-key-here"
+        username: admin
+    
+    # VM 3 - Another VM on first host
+    - name: app-server-01
+      nodeName: pve1
+      vmId: 102
+      cpu:
+        cores: 2
+        sockets: 1
+      memory:
+        dedicated: 2048  # 2GB in MB
+      disk:
+        interface: scsi0
+        datastoreId: local-lvm
+        size: 20  # GB
+      network:
+        bridge: vmbr0
+        model: virtio
+      clone:
+        nodeName: pve1
+        vmId: 9000
+        full: true
+      cloudInit:
+        datastoreId: local-lvm
+        ipv4:
+          address: 192.168.1.102/24
+          gateway: 192.168.1.1
+        sshKeys:
+          - "ssh-rsa AAAAB3NzaC1yc2E... your-key-here"

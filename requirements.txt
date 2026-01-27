@@ -1,4 +1,0 @@
-pulumi
-pulumi-command
-pulumi-kubernetes
-pulumi-proxmoxve

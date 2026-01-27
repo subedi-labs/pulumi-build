@@ -1,0 +1,21 @@
+{
+  "name": "proxmox-vm-deployment",
+  "version": "1.0.0",
+  "description": "Deploy VMs to Proxmox using Pulumi",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint . --ext .ts"
+  },
+  "dependencies": {
+    "@pulumi/pulumi": "^3.191.0",
+    "@muhlba91/pulumi-proxmoxve": "^7.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

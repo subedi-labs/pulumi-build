@@ -1,9 +1,6 @@
-name: pulumi-automate
-runtime: python
-description: Proxmox -> K3s -> Longhorn homelab cluster (Pulumi, Python)
-config:
-  pulumi:tags:
-    value:
-      repo: pulumi-automate
-      managed-by: pulumi
-      purpose: homelab
+name: proxmox-vm-deployment
+description: A modern Pulumi project for deploying VMs to Proxmox hosts using API tokens
+runtime:
+  name: nodejs
+  options:
+    typescript: true

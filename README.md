@@ -1,320 +1,285 @@
-# pulumi-automate
+# Proxmox VM Deployment with Pulumi
 
-Provision a small, long-running **K3s** cluster on **Proxmox** using **Pulumi (Python 3.12)**, then install **Longhorn** with replicas restricted to SSD-backed nodes.
+A modern, production-ready Pulumi project for deploying and managing Virtual Machines on Proxmox VE using TypeScript. This project follows Pulumi best practices and uses API token authentication for secure, automated deployments.
 
-This repo is designed for a modern homelab setup:
-- **Pulumi ProxmoxVE provider** creates/clones VMs from a cloud-init template
-- **Pulumi Command (remote SSH)** bootstraps K3s on those VMs
-- **Pulumi Kubernetes** installs Longhorn via Helm
-- Nodes are labeled at bootstrap so you can use affinity/selection later (see below for details)
-- Proxmox auth uses a **Proxmox API token stored as a Pulumi secret** (no shell `export ...` required)
+## Features
 
-## What it creates
-
-### Topology
-- **proxmox1**: 1x K3s server + 1x K3s worker
-- **proxmox2**: 1x K3s server + 1x K3s worker
-- **proxmox3**: 1x K3s worker
-
-### Storage policy
-- Longhorn is installed on the cluster
-- Longhorn default disks (and thus replicas) are created **only on SSD nodes**
-  - You provide the SSD node names via `ssdNodeNames`
-
-## Repo structure
-
-```text
-pulumi-automate/
-  __main__.py                    # tiny orchestration "story"
-  Pulumi.yaml
-  Pulumi.<stack>.yaml            # per-stack config (nodes/template/etc.)
-  requirements.txt
-  README.md
-
-  pulumi_automate/
-    constants.py                   # label keys, zone mapping, longhorn constants
-
-    components/
-      k3s.py                       # SSH bootstrap K3s + node labels + prereqs
-      longhorn.py                  # install Longhorn + label SSD nodes for disks
-
-    config/
-      models.py                    # dataclasses/types
-      load.py                      # reads Pulumi config and validates
-
-    providers/
-      kubernetes.py                # build k8s Provider from kubeconfig over SSH
-      proxmox.py                   # Proxmox provider + VM creation
-
-    utils/
-      net.py                       # small helpers
-```
-
-`__main__.py` stays intentionally small:
-1. load config
-2. create proxmox provider
-3. create VMs
-4. bootstrap k3s
-5. create k8s provider
-6. install longhorn
-7. export outputs
+- ✅ **API Token Authentication** - Secure authentication using Proxmox API tokens (no username/password)
+- ✅ **Multi-Host Support** - Deploy VMs across multiple Proxmox hosts
+- ✅ **Flexible VM Configuration** - Unique configuration for each VM
+- ✅ **Secrets Management** - Sensitive data stored securely in Pulumi config (not in state)
+- ✅ **Cloud-Init Support** - Automated VM initialization with network and SSH configuration
+- ✅ **Type Safety** - Full TypeScript type checking
+- ✅ **Modern Structure** - Follows latest Pulumi best practices
 
 ## Prerequisites
 
-### local
+- [Node.js](https://nodejs.org/) >= 18.0.0
+- [Pulumi CLI](https://www.pulumi.com/docs/get-started/install/) >= 3.0.0
+- Proxmox VE 7.0 or later
+- A Proxmox API token (see setup instructions below)
 
-* Python 3.12+
-* Pulumi CLI
-* SSH access to VMs (see next section)
+## Project Structure
 
-### Proxmox
-* cloud-init enabled VM template (Ubuntu recommended)
-* Your __SSH public key baked into template__
-    * Pulumi uses your private key to SSH in for bootstrap
-
-
-
-### Proxmox Authentication
-
-This repo uses Pulumi stack config for Proxmox connection info, and stores the API token as an encrypted Pulumi secret.
-
-```bash
-# 1. Select/init a stack
-pulumi stack select dev
-#or
-pulumi stack init dev
-
-# 2. Set proxmox config
-pulumi config set proxmoxEndpoint "https://proxmox1:8006/"
-pulumi config set proxmoxUsername "root@pam"
-pulumi config set proxmoxInsecure true
-
-# 4. Token (secret)
-pulumi config set --secret proxmoxApiToken "USER@REALM!TOKENID=UUID"
-
-# 5. Buff security
-pulumi config set proxmoxMinTls "1.3"
+```
+.
+├── index.ts                # Main Pulumi program
+├── Pulumi.yaml            # Project configuration
+├── Pulumi.dev.yaml        # Development stack configuration (example)
+├── package.json           # Node.js dependencies
+├── tsconfig.json          # TypeScript configuration
+├── .gitignore            # Git ignore rules
+└── README.md             # This file
 ```
 
+## Installation
 
-
-### SSH (VM access + bootstrap)
-
-#### Public key
-- Must exist in your Proxmox template (cloud-init template)
-- Pulumi does not push public keys
-
-#### Private key
-Pulumi uses your private key to SSH in for:
-- bootstrapping K3s
-- reading kubeconfig (for Kubernetes provider)
-
-Set path to your private key:
+### 1. Install Dependencies
 
 ```bash
-pulumi config set pulumi-automate:sshPrivateKeyPath "~/.ssh/id_ed25519"
+npm install
 ```
 
+### 2. Create a Proxmox API Token
 
+On your Proxmox server:
 
-### K3s + Longhorn config
+1. Navigate to **Datacenter → Permissions → API Tokens**
+2. Click **Add**
+3. Select a user (e.g., `root@pam`)
+4. Enter a Token ID (e.g., `pulumi`)
+5. Uncheck "Privilege Separation" if you want the token to have full user privileges
+6. Click **Add**
+7. **Important**: Copy the displayed secret immediately - it won't be shown again!
 
-Set k3s version and token used for nodes to join the cluster:
+The token format will be: `USER@REALM!TOKENID=SECRET`
+
+Example: `root@pam!pulumi=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+
+### 3. Initialize Pulumi Stack
 
 ```bash
-pulumi config set pulumi-automate:k3sVersion "v1.33.3+k3s1"
-pulumi config set --secret pulumi-automate:k3sToken "some-long-random-token"
+# Login to Pulumi (or use self-hosted backend)
+pulumi login
+
+# Create a new stack (e.g., 'dev', 'staging', 'prod')
+pulumi stack init homelab
 ```
 
-### Example `Pulumi.dev.yaml`
+### 4. Configure Pulumi
 
-Adjust VMIDs, IPs, datastores, and networks to match your homelab:
+Set your Proxmox connection details:
+
+```bash
+# Set Proxmox endpoint
+pulumi config set proxmox:endpoint "https://your-proxmox-host:8006"
+
+# Set API token as a secret (will be encrypted)
+pulumi config set --secret proxmox:apiToken "root@pam!pulumi=your-secret-token"
+
+# Optional: Skip TLS verification (for self-signed certificates)
+pulumi config set proxmox:insecure true
+```
+
+### 5. Configure Your VMs
+
+Edit `Pulumi.dev.yaml` (or create `Pulumi.<your-stack>.yaml`) to define your VMs:
 
 ```yaml
 config:
-  # Proxmox Provider (recommended homelab modern setup)
-  proxmoxEndpoint: "https://proxmox1:8006/"
-  proxmoxUsername: "root@pam"
-  proxmoxInsecure: true
-  proxmoxApiToken:
-    secure: "REDACTED"
-
-  # SSH for bootstrap (public key is in template)
-  pulumi-automate:sshUser: ubuntu
-  pulumi-automate:sshPrivateKey:
-    secure: "REDACTED"
-
-  # K3s
-  pulumi-automate:k3sVersion: "v1.33.3+k3s1"
-  pulumi-automate:k3sToken:
-    secure: "REDACTED"
-
-  # Template
-  pulumi-automate:template:
-    nodeName: proxmox1
-    vmId: 9000
-
-  # SSD nodes (names must match NodeSpec.name)
-  pulumi-automate:ssdNodeNames:
-    - k3s-px1-server
-    - k3s-px1-worker
-    - k3s-px2-server
-    - k3s-px2-worker
-
-  pulumi-automate:longhornReplicaCount: 2
-  pulumi-automate:longhornKubeletRootDir: "/var/lib/rancher/k3s/agent/kubelet"
-
-  # Nodes
-  pulumi-automate:nodes:
-    - name: k3s-px1-server
-      role: server
-      proxmoxNode: proxmox1
-      vmId: 101
-      ip4: 10.10.0.101/24
-      gw4: 10.10.0.1
-      cores: 2
-      memoryMb: 4096
-      diskGb: 40
-      datastoreId: local-lvm
-      initDatastoreId: local-lvm
-      bridge: vmbr0
-      vlanId: 2
-
-    - name: k3s-px1-worker
-      role: worker
-      proxmoxNode: proxmox1
-      vmId: 102
-      ip4: 10.10.0.102/24
-      gw4: 10.10.0.1
-      cores: 2
-      memoryMb: 4096
-      diskGb: 80
-      datastoreId: local-lvm
-      initDatastoreId: local-lvm
-      bridge: vmbr0
-      vlanId: 2
-
-    - name: k3s-px2-server
-      role: server
-      proxmoxNode: proxmox2
-      vmId: 201
-      ip4: 10.10.0.201/24
-      gw4: 10.10.0.1
-      cores: 2
-      memoryMb: 4096
-      diskGb: 40
-      datastoreId: local-lvm
-      initDatastoreId: local-lvm
-      bridge: vmbr0
-      vlanId: 2
-
-    - name: k3s-px2-worker
-      role: worker
-      proxmoxNode: proxmox2
-      vmId: 202
-      ip4: 10.10.0.202/24
-      gw4: 10.10.0.1
-      cores: 2
-      memoryMb: 4096
-      diskGb: 80
-      datastoreId: local-lvm
-      initDatastoreId: local-lvm
-      bridge: vmbr0
-      vlanId: 2
-
-    - name: k3s-px3-worker
-      role: worker
-      proxmoxNode: proxmox3
-      vmId: 301
-      ip4: 10.10.0.301/24
-      gw4: 10.10.0.1
-      cores: 2
-      memoryMb: 4096
-      diskGb: 120
-      datastoreId: hdd-store
-      initDatastoreId: hdd-store
-      bridge: vmbr0
-      vlanId: 2
+  proxmox:endpoint: https://proxmox.example.com:8006
+  proxmox:insecure: false
+  
+  vms:
+    - name: my-vm
+      nodeName: pve1          # Proxmox host
+      vmId: 100               # Optional
+      cpu:
+        cores: 2
+        sockets: 1
+      memory:
+        dedicated: 4096       # MB
+      disk:
+        interface: scsi0
+        datastoreId: local-lvm
+        size: 32              # GB
+      network:
+        bridge: vmbr0
+        model: virtio
+      clone:                  # Optional: clone from template
+        nodeName: pve1
+        vmId: 9000
+        full: true
+      cloudInit:              # Optional: cloud-init configuration
+        datastoreId: local-lvm
+        ipv4:
+          address: 192.168.1.100/24
+          gateway: 192.168.1.1
+        sshKeys:
+          - "ssh-rsa AAAAB3N... your-key"
 ```
 
-## Deployment
+## Usage
+
+### Deploy VMs
 
 ```bash
-# Install deps
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# Create Infra
+# Preview changes
 pulumi preview
+
+# Deploy infrastructure
 pulumi up
 ```
 
-### Outputs
-After a successful run, Pulumi exports
-- `stack`
-- `kubeApiServer`
-- `longhornNamespace`
-- `ssdNodeNames`
+### Update Configuration
 
-### Node labels
+1. Modify your `Pulumi.<stack>.yaml` file
+2. Run `pulumi up` to apply changes
 
-Nodes labeled at bootstrap via k3s in `/etc/rancher/k3s/config.yaml`
-
-Exmaples:
-- `homelab.pukar.io/cluster=<stack>`
-    - Tag for which Pulumi stack
-- `homelab.pukar.io/role=server|worker`
-- `homelab.pukar.io/storage=ssd|hdd`
-- `homelab.pukar.io/nodepool=core|bulk`
-    - groups nodes into pools (ssd=core vs hdd=bulk)
-- `topology.kubernetes.io/zone=zone-a|zone-b|zone-c`
-    - zone-a=proxmox1, zone-b=proxmox2, zone-c=proxmox3
-
-### Longhorn SSD-only behavior
-
-This repo labels SSD nodes with:
-- `node.longhorn.io/create-default-disk=true`
-
-sets:
-- `defaultSettings.createDefaultDiskLabeledNodes=true`
-
-So Longhorn creates default disks only on labeled nodes, effectively restricting replicas to SSD nodes when needed.
-
-## Philosophy
-
-`__main__.py` stays intentionally small and boring:
-- load config
-- create provider
-- create VMs
-- bootstrap K3s
-- create k8s provider
-- install Longhorn
-- export outputs
-
-if it grows move logic into modules/components, not the other way around.
-
-
-
-
-
-
-<!-- ## Install Dependencies
+### Destroy VMs
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+# Destroy all resources
+pulumi destroy
 ```
 
----
-
-## Pulumi stack setup
+### View Stack Outputs
 
 ```bash
-# Create/select a stack
-pulumi stack init dev
-# or
-pulumi stack select dev
-``` -->
+# List all stack outputs
+pulumi stack output
+
+# Get specific VM ID
+pulumi stack output vm-web-server-01-id
+```
+
+## Configuration Reference
+
+### Proxmox Provider Configuration
+
+| Config Key | Type | Required | Description |
+|------------|------|----------|-------------|
+| `proxmox:endpoint` | string | Yes | Proxmox API endpoint (https://host:8006) |
+| `proxmox:apiToken` | secret | Yes | API token (USER@REALM!TOKENID=SECRET) |
+| `proxmox:insecure` | boolean | No | Skip TLS verification (default: false) |
+
+### VM Configuration
+
+Each VM in the `vms` array supports:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | VM name |
+| `nodeName` | string | Yes | Proxmox host to deploy to |
+| `vmId` | number | No | Specific VM ID |
+| `cpu.cores` | number | Yes | Number of CPU cores |
+| `cpu.sockets` | number | Yes | Number of CPU sockets |
+| `memory.dedicated` | number | Yes | Memory in MB |
+| `disk.interface` | string | Yes | Disk interface (e.g., scsi0) |
+| `disk.datastoreId` | string | Yes | Storage datastore |
+| `disk.size` | number | Yes | Disk size in GB |
+| `disk.fileFormat` | string | No | Disk format (default: qcow2) |
+| `network.bridge` | string | Yes | Network bridge (e.g., vmbr0) |
+| `network.model` | string | Yes | Network model (e.g., virtio) |
+| `clone` | object | No | Clone from template VM |
+| `cloudInit` | object | No | Cloud-init configuration |
+
+## Security Best Practices
+
+1. **Never commit secrets** - API tokens are stored encrypted in Pulumi config
+2. **Use API tokens** - More secure than username/password
+3. **Principle of least privilege** - Create Proxmox users/tokens with only required permissions
+4. **Enable TLS verification** - Set `proxmox:insecure: false` in production
+5. **Use separate stacks** - Different stacks for dev/staging/prod environments
+
+## Advanced Usage
+
+### Using Pulumi ESC (Environments, Secrets, and Configuration)
+
+For better secrets management across projects:
+
+```bash
+# Create an ESC environment
+pulumi env init my-org/proxmox-prod
+
+# Set values in ESC
+pulumi env set my-org/proxmox-prod proxmox.endpoint "https://proxmox.example.com:8006"
+pulumi env set my-org/proxmox-prod proxmox.apiToken --secret "root@pam!pulumi=xxx"
+
+# Import in your stack
+pulumi config env add my-org/proxmox-prod
+```
+
+### Multiple Proxmox Providers
+
+To deploy to multiple Proxmox clusters:
+
+```typescript
+const provider1 = new proxmox.Provider("proxmox-dc1", {
+  endpoint: config.require("proxmox1:endpoint"),
+  apiToken: config.requireSecret("proxmox1:apiToken"),
+});
+
+const provider2 = new proxmox.Provider("proxmox-dc2", {
+  endpoint: config.require("proxmox2:endpoint"),
+  apiToken: config.requireSecret("proxmox2:apiToken"),
+});
+```
+
+### Organizing Multiple VMs
+
+For large deployments, consider extracting VM configurations to separate files:
+
+```typescript
+// vm-configs.ts
+export const webServers: VMConfig[] = [/* ... */];
+export const dbServers: VMConfig[] = [/* ... */];
+
+// index.ts
+import { webServers, dbServers } from './vm-configs';
+const allVMs = [...webServers, ...dbServers];
+```
+
+## Troubleshooting
+
+### API Token Issues
+
+**Problem**: "no such token" error
+
+**Solution**: Ensure token format is correct: `USER@REALM!TOKENID=SECRET`
+
+```bash
+# Correct format
+pulumi config set --secret proxmox:apiToken "root@pam!pulumi=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+```
+
+### TLS Certificate Errors
+
+**Problem**: SSL certificate verification failed
+
+**Solution**: Either add proper certificates or temporarily skip verification:
+
+```bash
+pulumi config set proxmox:insecure true
+```
+
+### VM ID Conflicts
+
+**Problem**: VM ID already exists
+
+**Solution**: Either:
+- Remove `vmId` to let Proxmox auto-assign
+- Use a different VM ID
+- Delete the existing VM
+
+### Permission Errors
+
+**Problem**: "Permission check failed"
+
+**Solution**: Ensure your API token has required permissions:
+
+```bash
+# On Proxmox server
+pveum acl modify / -token 'root@pam!pulumi' -role Administrator
+```
 
