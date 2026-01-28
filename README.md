@@ -1,167 +1,239 @@
-# Proxmox VM Deployment with Pulumi
+# Proxmox VM Deployment with Pulumi (TypeScript + Pulumi ESC)
 
-A modern, production-ready Pulumi project for deploying and managing Virtual Machines on Proxmox VE using TypeScript. This project follows Pulumi best practices and uses API token authentication for secure, automated deployments.
+A modern Pulumi project for deploying and managing Virtual Machines on Proxmox VE using TypeScript.  
+This project utilizes Pulumi ESC (Environments, Secrets, and Configuration) for keeping sensitive values out of repo config.
 
 ## Features
 
 - ✅ **API Token Authentication** - Secure authentication using Proxmox API tokens (no username/password)
-- ✅ **Multi-Host Support** - Deploy VMs across multiple Proxmox hosts
-- ✅ **Flexible VM Configuration** - Unique configuration for each VM
-- ✅ **Secrets Management** - Sensitive data stored securely in Pulumi config (not in state)
-- ✅ **Cloud-Init Support** - Automated VM initialization with network and SSH configuration
-- ✅ **Type Safety** - Full TypeScript type checking
-- ✅ **Modern Structure** - Follows latest Pulumi best practices
+- ✅ **Pulumi ESC for secrets**
+- ✅ **Multi-Host Support** — deploy VMs across multiple Proxmox nodes
+- ✅ **Flexible VM Configuration** — unique configuration per VM via stack YAML
+- ✅ **Cloud-Init Support** — automate network + SSH + user setup
+- ✅ **Type Safety** — TypeScript types and validation patterns
+
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 18.0.0
-- [Pulumi CLI](https://www.pulumi.com/docs/get-started/install/) >= 3.0.0
-- Proxmox VE 7.0 or later
-- A Proxmox API token (see setup instructions below)
+- Node.js >= 18
+- Pulumi CLI >= 3
+- Proxmox VE 7+
+- Proxmox API token
+
 
 ## Project Structure
 
 ```
 .
-├── index.ts                # Main Pulumi program
-├── Pulumi.yaml            # Project configuration
-├── Pulumi.dev.yaml        # Development stack configuration (example)
-├── package.json           # Node.js dependencies
-├── tsconfig.json          # TypeScript configuration
-├── .gitignore            # Git ignore rules
-└── README.md             # This file
+├── index.ts                 # Main Pulumi program
+├── Pulumi.yaml              # Project config
+├── Pulumi.dev.yaml          # Dev stack config - usually NOT committed
+├── Pulumi.prod.yaml         # Prod stack config - commit only if appropriate
+├── Pulumi.example.yaml      # Example/template config
+├── package.json             # Node.js dependencies
+├── tsconfig.json            # TypeScript configuration
+├── .gitignore
+└── README.md
 ```
 
-## Installation
 
-### 1. Install Dependencies
+## 1) Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Create a Proxmox API Token
+
+## 2) Create a Proxmox API Token
 
 On your Proxmox server:
 
-1. Navigate to **Datacenter → Permissions → API Tokens**
-2. Click **Add**
-3. Select a user (e.g., `root@pam`)
-4. Enter a Token ID (e.g., `pulumi`)
-5. Uncheck "Privilege Separation" if you want the token to have full user privileges
-6. Click **Add**
-7. **Important**: Copy the displayed secret immediately - it won't be shown again!
+1. Datacenter → Permissions → API Tokens → Add
+2. Select user (e.g., `root@pam`)
+3. Enter Token ID (e.g., `pulumi`)
+4. Uncheck "Privilege Separation" if you want the token to have full user privileges → Add
+5. Copy secret (it won't be shown again)
 
-The token format will be: `USER@REALM!TOKENID=SECRET`
+Token format: `USER@REALM!TOKENID=SECRET`
 
 Example: `root@pam!pulumi=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
 
-### 3. Initialize Pulumi Stack
+
+## 3) Create and Configure Pulumi ESC
+
+Standard naming convention: `<org>/<env>` 
+
+example: `subedi-labs/proxmox-shared`
+
+
+Create it (once):
 
 ```bash
-# Login to Pulumi (or use self-hosted backend)
+pulumi env init subedi-labs/proxmox-prod
+```
+
+Set configs in ESC.
+
+```bash
+pulumi env set subedi-labs/proxmox-prod "proxmox:endpoint" "https://YOUR_PROXMOX_HOST:8006"
+pulumi env set subedi-labs/proxmox-prod "proxmox:insecure" true
+pulumi env set subedi-labs/proxmox-prod "proxmox:apiToken" --secret "root@pam!pulumi=YOUR_SECRET"
+```
+
+## 4) Initialize Stack and Attach ESC
+
+From the project directory:
+
+```bash
 pulumi login
-
-# Create a new stack (e.g., 'dev', 'staging', 'prod')
-pulumi stack init homelab
+pulumi stack init prod
+pulumi config env add subedi-labs/proxmox-prod
 ```
 
-### 4. Configure Pulumi
-
-Set your Proxmox connection details:
+Verify ESC is attached:
 
 ```bash
-# Set Proxmox endpoint
-pulumi config set proxmox:endpoint "https://your-proxmox-host:8006"
-
-# Set API token as a secret (will be encrypted)
-pulumi config set --secret proxmox:apiToken "root@pam!pulumi=your-secret-token"
-
-# Optional: Skip TLS verification (for self-signed certificates)
-pulumi config set proxmox:insecure true
+pulumi config env ls
 ```
 
-### 5. Configure Your VMs
 
-Edit `Pulumi.dev.yaml` (or create `Pulumi.<your-stack>.yaml`) to define your VMs:
+## 5) VM definitions per stack
+
+Create stack YAML files to define your `vms:` list.  
+
+Example: `Pulumi.prod.yaml`
 
 ```yaml
 config:
-  proxmox:endpoint: https://proxmox.example.com:8006
-  proxmox:insecure: false
-  
   vms:
-    - name: my-vm
-      nodeName: pve1          # Proxmox host
-      vmId: 100               # Optional
-      cpu:
-        cores: 2
+    # VM 1 - Cloned from template
+    - name: server-01
+      nodeName: proxmox1    # Proxmox host name
+      vmId: 100   # Optional: specific VM ID
+      cpu: 
+        cores: 1 
         sockets: 1
-      memory:
-        dedicated: 4096       # MB
+      memory: 
+        dedicated: 1000
       disk:
         interface: scsi0
         datastoreId: local-lvm
-        size: 32              # GB
+        size: 20
+        fileFormat: qcow2
       network:
         bridge: vmbr0
         model: virtio
-      clone:                  # Optional: clone from template
+      clone:
+        nodeName: pve1
+        vmId: 9000    # Template VM ID
+        full: true
+      cloudInit:
+        datastoreId: local-lvm
+        dns:
+          domain: example.com
+          server: 10.0.0.1,8.8.8.8
+        ipv4:
+          address: 10.0.0.100/24
+          gateway: 10.0.0.1
+        sshKeys:
+          - "ssh-rsa AAAA...your-public-key"
+        username: admin
+
+    # VM 2 - Different host, different configuration
+    - name: server-02
+      nodeName: pve2
+      vmId: 101
+      cpu:
+        cores: 1
+        sockets: 1
+      memory:
+        dedicated: 1000
+      disk:
+        interface: scsi0
+        datastoreId: local-lvm
+        size: 20
+      network:
+        bridge: vmbr0
+        model: virtio
+      clone:
+        nodeName: pve2
+        vmId: 9000
+        full: true
+      cloudInit:
+        datastoreId: local-lvm
+        dns:
+          domain: example.com
+          server: 10.0.0.1,8.8.8.8
+        ipv4:
+          address: 10.0.0.101/24
+          gateway: 10.0.0.1
+        sshKeys:
+          - "ssh-rsa AAAAB3NzaC1yc2E... your-key-here"
+        username: admin
+
+    # VM 3 - Another VM on first host
+    - name: worker-01
+      nodeName: pve1
+      vmId: 102
+      cpu:
+        cores: 1
+        sockets: 1
+      memory:
+        dedicated: 2048
+      disk:
+        interface: scsi0
+        datastoreId: local-lvm
+        size: 20
+      network:
+        bridge: vmbr0
+        model: virtio
+      clone:
         nodeName: pve1
         vmId: 9000
         full: true
-      cloudInit:              # Optional: cloud-init configuration
+      cloudInit:
         datastoreId: local-lvm
         ipv4:
-          address: 192.168.1.100/24
-          gateway: 192.168.1.1
+          address: 10.0.0.102/24
+          gateway: 10.0.0.1
         sshKeys:
-          - "ssh-rsa AAAAB3N... your-key"
+          - "ssh-rsa AAAAB3NzaC1yc2E... your-key-here"
 ```
 
 ## Usage
 
-### Deploy VMs
+### Deploy
 
 ```bash
-# Preview changes
+pulumi stack select prod
 pulumi preview
-
-# Deploy infrastructure
 pulumi up
 ```
 
-### Update Configuration
+### Update
 
-1. Modify your `Pulumi.<stack>.yaml` file
-2. Run `pulumi up` to apply changes
-
-### Destroy VMs
+1. Edit `Pulumi.<stack>.yaml` (VM definitions)
+2. Run:
 
 ```bash
-# Destroy all resources
+pulumi up
+```
+
+### Destroy
+
+```bash
 pulumi destroy
 ```
 
-### View Stack Outputs
+### Stack Outputs
 
 ```bash
-# List all stack outputs
 pulumi stack output
-
 # Get specific VM ID
-pulumi stack output vm-web-server-01-id
+pulumi stack output worker-01
 ```
 
 ## Configuration Reference
-
-### Proxmox Provider Configuration
-
-| Config Key | Type | Required | Description |
-|------------|------|----------|-------------|
-| `proxmox:endpoint` | string | Yes | Proxmox API endpoint (https://host:8006) |
-| `proxmox:apiToken` | secret | Yes | API token (USER@REALM!TOKENID=SECRET) |
-| `proxmox:insecure` | boolean | No | Skip TLS verification (default: false) |
 
 ### VM Configuration
 
@@ -184,31 +256,7 @@ Each VM in the `vms` array supports:
 | `clone` | object | No | Clone from template VM |
 | `cloudInit` | object | No | Cloud-init configuration |
 
-## Security Best Practices
-
-1. **Never commit secrets** - API tokens are stored encrypted in Pulumi config
-2. **Use API tokens** - More secure than username/password
-3. **Principle of least privilege** - Create Proxmox users/tokens with only required permissions
-4. **Enable TLS verification** - Set `proxmox:insecure: false` in production
-5. **Use separate stacks** - Different stacks for dev/staging/prod environments
-
 ## Advanced Usage
-
-### Using Pulumi ESC (Environments, Secrets, and Configuration)
-
-For better secrets management across projects:
-
-```bash
-# Create an ESC environment
-pulumi env init my-org/proxmox-prod
-
-# Set values in ESC
-pulumi env set my-org/proxmox-prod proxmox.endpoint "https://proxmox.example.com:8006"
-pulumi env set my-org/proxmox-prod proxmox.apiToken --secret "root@pam!pulumi=xxx"
-
-# Import in your stack
-pulumi config env add my-org/proxmox-prod
-```
 
 ### Multiple Proxmox Providers
 
@@ -242,36 +290,6 @@ const allVMs = [...webServers, ...dbServers];
 
 ## Troubleshooting
 
-### API Token Issues
-
-**Problem**: "no such token" error
-
-**Solution**: Ensure token format is correct: `USER@REALM!TOKENID=SECRET`
-
-```bash
-# Correct format
-pulumi config set --secret proxmox:apiToken "root@pam!pulumi=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-```
-
-### TLS Certificate Errors
-
-**Problem**: SSL certificate verification failed
-
-**Solution**: Either add proper certificates or temporarily skip verification:
-
-```bash
-pulumi config set proxmox:insecure true
-```
-
-### VM ID Conflicts
-
-**Problem**: VM ID already exists
-
-**Solution**: Either:
-- Remove `vmId` to let Proxmox auto-assign
-- Use a different VM ID
-- Delete the existing VM
-
 ### Permission Errors
 
 **Problem**: "Permission check failed"
@@ -282,4 +300,3 @@ pulumi config set proxmox:insecure true
 # On Proxmox server
 pveum acl modify / -token 'root@pam!pulumi' -role Administrator
 ```
-
