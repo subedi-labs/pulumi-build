@@ -1,92 +1,87 @@
-config:
-  # Proxmox connection settings
-  # Set these using: pulumi config set proxmox:endpoint "https://your-proxmox-host:8006"
+# 1. Below are defaults, update them to your specifications
+# 2. Set secrets via CLI before running Pulumi:
+#   pulumi config set --secret proxmox:apiToken "root@pam!mytoken=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+#   pulumi config set --secret proxmox:endpoint: https://<proxmox-host-IP>:8006
+#   pulumi config set --secret proxmox:insecure: <true|false>
 
-  # BELOW THREE WILL GO INTO PULUMI SECRET STORE (ESC)
-  # Set API token using: pulumi config set --secret proxmox:apiToken "root@pam!mytoken=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-  # proxmox:endpoint: https://proxmox.example.com:8006
-  # proxmox:insecure: false  # Set to true to skip TLS verification
+config:
+  # ---- Anchors example ----
+  x-cpu: &cpu
+    cores: 1
+    sockets: 1
+
+  x-memory: &memory
+    dedicated: 1000 # MB
+
+  x-disk: &disk
+    interface: scsi0
+    datastoreId: local-lvm
+    size: 20
+    fileFormat: qcow2
   
+  x-network: &network
+    bridge: vmbr0
+    model: virtio
+
+  x-clone_template: &clone_template
+    nodeName: proxmox1
+    vmId: 9000  # Template VM ID
+    full: true
+
+  x-cloudinit: &cloudinit
+    datastoreId: local-lvm
+    ipv4:
+      address: 10.0.0.100/24
+      gateway: 10.0.0.1
+    dns:
+      domain: lab
+      servers: [10.0.0.1, 8.8.8.8]
+    sshKeys:
+      - "ssh-rsa AAAAB3NzaC1yc2E... your-key-here"
+    username: admin
+
   # VM configurations
   vms:
     # VM 1 - Cloned from template
-    - name: web-server-01
-      nodeName: pve1  # Proxmox host name
+    - name: server-01
+      nodeName: proxmox1  # Proxmox host name
       vmId: 100       # Optional: specific VM ID
-      cpu:
-        cores: 2
-        sockets: 1
-      memory:
-        dedicated: 4096  # 4GB in MB
-      disk:
-        interface: scsi0
-        datastoreId: local-lvm
-        size: 32  # GB
-        fileFormat: qcow2
-      network:
-        bridge: vmbr0
-        model: virtio
-      clone:
-        nodeName: pve1
-        vmId: 9000  # Template VM ID
-        full: true
-      cloudInit:
-        datastoreId: local-lvm
-        dns:
-          domain: example.com
-          server: 8.8.8.8
-        ipv4:
-          address: 192.168.1.100/24
-          gateway: 192.168.1.1
-        sshKeys:
-          - "ssh-rsa AAAAB3NzaC1yc2E... your-key-here"
-        username: admin
+      cpu: *cpu
+      memory: *memory
+      disk: *disk`
+      network: *network
+      clone: *clone_template
+      cloudInit: *cloudinit
     
     # VM 2 - Different host, different configuration
-    - name: db-server-01
-      nodeName: pve2  # Different Proxmox host
+    - name: server-02
+      nodeName: proxmox2
       vmId: 101
-      cpu:
-        cores: 4
-        sockets: 1
-      memory:
-        dedicated: 8192  # 8GB in MB
-      disk:
-        interface: scsi0
-        datastoreId: local-lvm
-        size: 64  # GB
-      network:
-        bridge: vmbr0
-        model: virtio
+      cpu: *cpu
+      memory: *memory
+      disk: *disk
+      network: *network
       clone:
-        nodeName: pve2
-        vmId: 9000
-        full: true
+        <<: *clone_template
+        nodeName: proxmox2
       cloudInit:
-        datastoreId: local-lvm
-        dns:
-          domain: example.com
-          server: 8.8.8.8
+        <<: *cloudinit
         ipv4:
-          address: 192.168.1.101/24
-          gateway: 192.168.1.1
-        sshKeys:
-          - "ssh-rsa AAAAB3NzaC1yc2E... your-key-here"
-        username: admin
+          address: 10.0.0.101/24
     
     # VM 3 - Another VM on first host
-    - name: app-server-01
-      nodeName: pve1
+    - name: worker-01
+      nodeName: proxmox1
       vmId: 102
       cpu:
-        cores: 2
+        cores: 1
         sockets: 1
       memory:
-        dedicated: 2048  # 2GB in MB
+        dedicated: 1000
       disk:
         interface: scsi0
         datastoreId: local-lvm
-        size: 20  # GB
+        size: 20
       network:
         bridge: vmbr0
         model: virtio
@@ -97,7 +92,7 @@ config:
       cloudInit:
         datastoreId: local-lvm
         ipv4:
-          address: 192.168.1.102/24
-          gateway: 192.168.1.1
+          address: 10.0.0.102/24
+          gateway: 10.0.0.1
         sshKeys:
           - "ssh-rsa AAAAB3NzaC1yc2E... your-key-here"

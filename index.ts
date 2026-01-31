@@ -1,22 +1,24 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as proxmox from "@muhlba91/pulumi-proxmoxve";
 
-
+/**
+ * Configuration interface for a VM
+ */
 interface VMConfig {
     name: string;
-    nodeName: string;  // Proxmox host to deploy to
-    vmId?: number;     // Optional VM ID
+    nodeName: string; // Proxmox host to deploy to
+    vmId?: number; // Optional VM ID
     cpu: {
         cores: number;
         sockets: number;
     };
     memory: {
-        dedicated: number;  // MB
+        dedicated: number; // MB
     };
     disk: {
         interface: string;
         datastoreId: string;
-        size: number;       // GB
+        size: number; // GB
         fileFormat?: string;
     };
     network: {
@@ -32,7 +34,7 @@ interface VMConfig {
         datastoreId: string;
         dns?: {
             domain: string;
-            server: string;
+            servers: string[];
         };
         ipv4?: {
             address: string;
@@ -44,25 +46,42 @@ interface VMConfig {
     };
 }
 
-
-
+/**
+ * Pulumi program entrypoint
+ */
 async function main() {
     const config = new pulumi.Config();
 
+    // Proxmox API credentials from Pulumi config
+    // Set with:
+    //   pulumi config set proxmox:endpoint https://<host>:8006/api2/json
+    //   pulumi config set --secret proxmox:apiToken "USER@REALM!TOKENID=SECRET"
     const endpoint = config.require("proxmox:endpoint");
     const apiToken = config.requireSecret("proxmox:apiToken");
     const insecure = config.getBoolean("proxmox:insecure") ?? false;
+
+    // Proxmox provider (API token auth)
     const provider = new proxmox.Provider("proxmoxve", {
-        endpoint: endpoint,
-        apiToken: apiToken,
-        insecure: insecure,
+        endpoint,
+        apiToken,
+        insecure,
     });
 
-    // Get VM configurations from Pulumi.<stack>.yaml
+    // VM configurations from Pulumi.<stack>.yaml
     const vmConfigs: VMConfig[] = config.requireObject("vms");
 
-    // Create VMs based on configuration
-    const vms: pulumi.Output<any>[] = [];
+    // Create VMs and capture outputs in a structured way
+    const vmsByName: Record<
+        string,
+        {
+            id: pulumi.Output<any>;
+            name: pulumi.Output<string>;
+            nodeName: string;
+            requestedVmId?: number;
+        }
+    > = {};
+
+    const vmIds: pulumi.Output<any>[] = [];
 
     for (const vmConfig of vmConfigs) {
         const vm = new proxmox.vm.VirtualMachine(
@@ -72,24 +91,28 @@ async function main() {
                 nodeName: vmConfig.nodeName,
                 vmId: vmConfig.vmId,
 
+                // CPU configuration
                 cpu: {
                     cores: vmConfig.cpu.cores,
                     sockets: vmConfig.cpu.sockets,
                 },
 
+                // Memory configuration
                 memory: {
                     dedicated: vmConfig.memory.dedicated,
                 },
 
+                // Disk configuration
                 disks: [
                     {
                         interface: vmConfig.disk.interface,
                         datastoreId: vmConfig.disk.datastoreId,
                         size: vmConfig.disk.size,
-                        fileFormat: vmConfig.disk.fileFormat || "qcow2",
+                        fileFormat: vmConfig.disk.fileFormat ?? "qcow2",
                     },
                 ],
 
+                // Network configuration
                 networkDevices: [
                     {
                         bridge: vmConfig.network.bridge,
@@ -111,12 +134,14 @@ async function main() {
                     initialization: {
                         type: "nocloud",
                         datastoreId: vmConfig.cloudInit.datastoreId,
+
                         ...(vmConfig.cloudInit.dns && {
                             dns: {
                                 domain: vmConfig.cloudInit.dns.domain,
-                                server: vmConfig.cloudInit.dns.server,
+                                servers: vmConfig.cloudInit.dns.servers,
                             },
                         }),
+
                         ...(vmConfig.cloudInit.ipv4 && {
                             ipConfigs: [
                                 {
@@ -127,9 +152,11 @@ async function main() {
                                 },
                             ],
                         }),
+
+                        // If sshKeys provided, create userAccount. (Optionally include password)
                         ...(vmConfig.cloudInit.sshKeys && {
                             userAccount: {
-                                username: vmConfig.cloudInit.username || "root",
+                                username: vmConfig.cloudInit.username ?? "root",
                                 keys: vmConfig.cloudInit.sshKeys,
                                 ...(vmConfig.cloudInit.password && {
                                     password: vmConfig.cloudInit.password,
@@ -148,23 +175,36 @@ async function main() {
                     type: "virtio",
                 },
                 operatingSystem: {
-                    type: "l26",  // Linux 2.6+ kernel
+                    type: "l26", // Linux 2.6+ kernel
                 },
             },
             {
-                provider: provider,
+                provider,
             }
         );
 
-        vms.push(vm.id);
+        vmIds.push(vm.id);
 
-        // Export VM information
-        pulumi.export(`vm-${vmConfig.name}-id`, vm.id);
-        pulumi.export(`vm-${vmConfig.name}-name`, vm.name);
+        // Collect outputs per VM
+        vmsByName[vmConfig.name] = {
+            id: vm.id,
+            name: vm.name,
+            nodeName: vmConfig.nodeName,
+            requestedVmId: vmConfig.vmId,
+        };
     }
 
-    // Export summary
-    pulumi.export("total-vms", vms.length);
+    // Extra summary outputs (handy for automation / scripts)
+    // Note: these are stack outputs in TypeScript via `export const ...` (NOT pulumi.export)
+    return {
+        totalVms: vmConfigs.length,
+        vmsByName,
+        vmIdList: pulumi.all(vmIds),
+    };
 }
 
-main();
+// Run main and export stack outputs
+const outputs = main();
+export const totalVms = outputs.then((o) => o.totalVms);
+export const vmsByName = outputs.then((o) => o.vmsByName);
+export const vmIdList = outputs.then((o) => o.vmIdList);
