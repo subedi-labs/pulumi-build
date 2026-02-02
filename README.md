@@ -58,8 +58,23 @@ Token format: `USER@REALM!TOKENID=SECRET`
 
 Example: `root@pam!pulumi=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
 
+## 3) Initialize Stack and Attach ESC
 
-## 3) Create and Configure Pulumi ESC
+From the project directory:
+
+```bash
+pulumi login
+pulumi stack init prod
+pulumi config env add subedi-labs/proxmox-prod
+```
+
+Verify ESC is attached:
+
+```bash
+pulumi config env ls
+```
+
+## 4) Create and Configure Pulumi ESC
 
 Standard naming convention: `<org>/<env>` 
 
@@ -78,22 +93,6 @@ Set configs in ESC.
 pulumi env set subedi-labs/proxmox-prod "proxmox:endpoint" "https://YOUR_PROXMOX_HOST:8006"
 pulumi env set subedi-labs/proxmox-prod "proxmox:insecure" true
 pulumi env set subedi-labs/proxmox-prod "proxmox:apiToken" --secret "root@pam!pulumi=YOUR_SECRET"
-```
-
-## 4) Initialize Stack and Attach ESC
-
-From the project directory:
-
-```bash
-pulumi login
-pulumi stack init prod
-pulumi config env add subedi-labs/proxmox-prod
-```
-
-Verify ESC is attached:
-
-```bash
-pulumi config env ls
 ```
 
 
