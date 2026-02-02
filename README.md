@@ -63,7 +63,7 @@ Example: `root@pam!pulumi=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
 
 Standard naming convention: `<org>/<env>` 
 
-example: `subedi-labs/proxmox-shared`
+example: `subedi-labs/proxmox-prod`
 
 
 Create it (once):
